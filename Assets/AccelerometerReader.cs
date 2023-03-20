@@ -97,13 +97,12 @@ public class AccelerometerReader : MonoBehaviour
                 if(index >= recData.Count) { break; }
                 Triple triple = recData[index];
 
-                tex.SetPixel(x, y, new Color(triple.x / 5f, triple.y / 5f, triple.z / 5f));
+                tex.SetPixel(x, y, new Color(Math.Clamp((triple.x + 4f) / 8f, 0, 1), Math.Clamp((triple.y + 4f) / 8f, 0, 1), Math.Clamp((triple.z + 4f) / 8f, 0, 1)));
             }
         }
         tex.Apply();
 
         byte[] texBytes = tex.EncodeToPNG();
-        File.WriteAllBytes("Data " + Guid.NewGuid().ToString() + ".png", texBytes);
+        File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
     }
-
 }
