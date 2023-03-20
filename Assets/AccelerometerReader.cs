@@ -5,6 +5,8 @@ using TMPro;
 using System;
 using UnityEngine.UI;
 using System.IO;
+using Unity.Mathematics;
+using Random = UnityEngine.Random;
 
 [Serializable]
 public class Triple
@@ -23,6 +25,8 @@ public class Triple
 
 public class AccelerometerReader : MonoBehaviour
 {
+    public RawImage IMAGE;
+
     public TMP_Text XAxis;
     public TMP_Text YAxis;
     public TMP_Text ZAxis;
@@ -52,10 +56,14 @@ public class AccelerometerReader : MonoBehaviour
         //Debug.Log("Tick");
         if (recordToggle.isOn)
         {
-            recData.Add(new Triple(
+            /*recData.Add(new Triple(
                 Input.acceleration.x,
                 Input.acceleration.y,
-                Input.acceleration.z));
+                Input.acceleration.z));*/
+            recData.Add(new Triple(
+                Random.Range(-4f, 4f),
+                Random.Range(-4f, 4f),
+                Random.Range(-4f, 4f)));
             Debug.Log(recData.Count);
         }
     }
@@ -87,21 +95,22 @@ public class AccelerometerReader : MonoBehaviour
     public void SaveRecordingCache()
     {
         //Encode data as an image (First a Texture2D)
-        var tex = new Texture2D((recData.Count + 1) / 2, (recData.Count + 1) / 2);
+        int magicLength = Mathf.CeilToInt(Mathf.Sqrt(recData.Count + 1));
+        var tex = new Texture2D(magicLength, magicLength);
         for (int y = 0; y < tex.height; y++)
         {
             for (int x = 0; x < tex.width; x++)
             {
                 //Gets from 1D array using 2D coords. Takes the x pos and adds any previous completed rows (y * tex.width)
-                int index = x + y * tex.width;
-                if(index >= recData.Count) { break; }
+                int index = x + (y * tex.width);
+                if(index >= recData.Count) { Debug.Log(index); continue; }
                 Triple triple = recData[index];
 
                 tex.SetPixel(x, y, new Color(Math.Clamp((triple.x + 4f) / 8f, 0, 1), Math.Clamp((triple.y + 4f) / 8f, 0, 1), Math.Clamp((triple.z + 4f) / 8f, 0, 1)));
             }
         }
         tex.Apply();
-
+        IMAGE.texture = tex;
         byte[] texBytes = tex.EncodeToPNG();
         File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
     }
