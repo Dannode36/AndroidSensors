@@ -97,20 +97,31 @@ public class AccelerometerReader : MonoBehaviour
         //Encode data as an image (First a Texture2D)
         int magicLength = Mathf.CeilToInt(Mathf.Sqrt(recData.Count + 1));
         var tex = new Texture2D(magicLength, magicLength);
+
+        /*//Will display create the texture the right way up (dunno why but without this the image is rotated 180 degrees)
+        recData.Reverse();*/
+
         for (int y = 0; y < tex.height; y++)
         {
             for (int x = 0; x < tex.width; x++)
             {
                 //Gets from 1D array using 2D coords. Takes the x pos and adds any previous completed rows (y * tex.width)
                 int index = x + (y * tex.width);
-                if(index >= recData.Count) { Debug.Log(index); continue; }
+                if(index >= recData.Count) 
+                {
+                    tex.SetPixel(x, y, Color.black);
+                    Debug.Log(index);
+                    continue;
+                }
+                Debug.Log(index);
                 Triple triple = recData[index];
-
                 tex.SetPixel(x, y, new Color(Math.Clamp((triple.x + 4f) / 8f, 0, 1), Math.Clamp((triple.y + 4f) / 8f, 0, 1), Math.Clamp((triple.z + 4f) / 8f, 0, 1)));
             }
         }
         tex.Apply();
+
         IMAGE.texture = tex;
+        IMAGE.mainTexture.filterMode = FilterMode.Point;
         byte[] texBytes = tex.EncodeToPNG();
         File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
     }
