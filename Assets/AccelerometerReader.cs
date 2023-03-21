@@ -34,14 +34,18 @@ public class AccelerometerReader : MonoBehaviour
     public TMP_InputField rateInput;
     public Button SaveButton;
     public Button ClearButton;
+    public Button CalibrateButton;
 
     public TMP_InputField minRecValueInput;
     public TMP_InputField maxRecValueInput;
     private float minRecValue = -2f;
     private float maxRecValue = 2f;
 
+    bool calibrating;
     public List<Triple> recData = new();
     Color bgColour = new(0.1921569f, 0.3019608f, 0.4745098f);
+    readonly Triple calibratedOffset = new(0, 0, 0);
+    public int calibrationRequirement = 240;
 
     void Start()
     {
@@ -52,48 +56,89 @@ public class AccelerometerReader : MonoBehaviour
         recordToggle.onValueChanged.AddListener(SetRecording);
         SaveButton.onClick.AddListener(SaveRecordingCache);
         ClearButton.onClick.AddListener(ClearRecordingCache);
+        CalibrateButton.onClick.AddListener(Calibrate);
     }
 
     // Update is called once per frame
     void FixedUpdate()
     {
-        XAxis.text = Input.acceleration.x.ToString();
-        YAxis.text = Input.acceleration.y.ToString();
-        ZAxis.text = Input.acceleration.z.ToString();
-
-        //Debug.Log("Tick");
-        if (recordToggle.isOn)
+        if (!calibrating)
         {
-            recData.Add(new Triple(
-                Input.acceleration.x,
-                Input.acceleration.y,
-                Input.acceleration.z));
-            /*recData.Add(new Triple(
-                Random.Range(-4f, 4f),
-                Random.Range(-4f, 4f),
-                Random.Range(-4f, 4f)));*/
-            Debug.Log(recData.Count);
+            XAxis.text = (Input.acceleration.x - calibratedOffset.x).ToString();
+            YAxis.text = (Input.acceleration.y - calibratedOffset.y).ToString();
+            ZAxis.text = (Input.acceleration.z - calibratedOffset.z).ToString();
+
+            //Debug.Log("Tick");
+            if (recordToggle.isOn)
+            {
+                recData.Add(new Triple(
+                    Input.acceleration.x - calibratedOffset.x,
+                    Input.acceleration.y - calibratedOffset.y,
+                    Input.acceleration.z - calibratedOffset.z));
+                Debug.Log(recData.Count);
+            }
+        }
+        else
+        {
+            if(recData.Count < calibrationRequirement) 
+            {
+                Debug.Log("ASOLHJd");
+                recData.Add(new Triple(
+                    Input.acceleration.x,
+                    Input.acceleration.y,
+                    Input.acceleration.z));
+            }
+            else
+            {
+                foreach (var triple in recData)
+                {
+                    calibratedOffset.x += triple.x;
+                    calibratedOffset.y += triple.y;
+                    calibratedOffset.z += triple.z;
+                }
+
+                calibratedOffset.x /= calibrationRequirement;
+                calibratedOffset.y /= calibrationRequirement;
+                calibratedOffset.z /= calibrationRequirement;
+
+                recData.Clear();
+                Camera.main.backgroundColor = bgColour;
+                calibrating = false;
+            }
         }
     }
 
     public void SetRefreshRate(string frequency)
     {
-        Time.fixedDeltaTime = 1 / float.Parse(frequency.Replace("Hz", ""));
-        if (!rateInput.text.Contains("Hz"))
+        if (!calibrating)
         {
-            rateInput.text += " Hz";
+            Time.fixedDeltaTime = 1 / float.Parse(frequency.Replace("Hz", ""));
+            if (!rateInput.text.Contains("Hz"))
+            {
+                rateInput.text += " Hz";
+            }
         }
+    }
+    public void Calibrate()
+    {
+        recData.Clear();
+        Time.fixedDeltaTime = 1 / 60f;
+        Camera.main.backgroundColor = Color.yellow;
+        calibrating = true;
     }
 
     public void SetRecording(bool value)
     {
-        if (value)
+        if(!calibrating)
         {
-            Camera.main.backgroundColor = Color.red;
-        }
-        else
-        {
-            Camera.main.backgroundColor = bgColour;
+            if (value)
+            {
+                Camera.main.backgroundColor = Color.red;
+            }
+            else
+            {
+                Camera.main.backgroundColor = bgColour;
+            }
         }
     }
     public void SetMinRecordingValue(string value)
@@ -132,41 +177,47 @@ public class AccelerometerReader : MonoBehaviour
     }
     public void ClearRecordingCache()
     {
-        recData.Clear();
+        if (!calibrating)
+        {
+            recData.Clear();
+        }
     }
     public void SaveRecordingCache()
     {
-        //Encode data as an image (First a Texture2D)
-        int magicLength = Mathf.CeilToInt(Mathf.Sqrt(recData.Count));
-        var tex = new Texture2D(magicLength, magicLength);
-
-        for (int y = 0; y < tex.height; y++)
+        if (!calibrating)
         {
-            for (int x = 0; x < tex.width; x++)
+            //Encode data as an image (First a Texture2D)
+            int magicLength = Mathf.CeilToInt(Mathf.Sqrt(recData.Count));
+            var tex = new Texture2D(magicLength, magicLength);
+
+            for (int y = 0; y < tex.height; y++)
             {
-                //Gets from 1D array using 2D coords. Takes the x pos and adds any previous completed rows (y * tex.width)
-                int index = x + (y * tex.width);
-
-                //Avoids overruns and inserts a "0"
-                if (index >= recData.Count)
+                for (int x = 0; x < tex.width; x++)
                 {
-                    tex.SetPixel(x, y, Color.black);
-                    continue;
-                }
-                Triple triple = recData[index];
-                tex.SetPixel(x, y, ClampC(triple));
-            }
-        }
-        tex.Apply();
+                    //Gets from 1D array using 2D coords. Takes the x pos and adds any previous completed rows (y * tex.width)
+                    int index = x + (y * tex.width);
 
-        IMAGE.texture = tex;
-        IMAGE.mainTexture.filterMode = FilterMode.Point;
-        byte[] texBytes = tex.EncodeToPNG();
-        //Array.Reverse(texBytes);
+                    //Avoids overruns and inserts a "0"
+                    if (index >= recData.Count)
+                    {
+                        tex.SetPixel(x, y, Color.black);
+                        continue;
+                    }
+                    Triple triple = recData[index];
+                    tex.SetPixel(x, y, ClampC(triple));
+                }
+            }
+            tex.Apply();
+
+            IMAGE.texture = tex;
+            IMAGE.mainTexture.filterMode = FilterMode.Point;
+            byte[] texBytes = tex.EncodeToPNG();
+            //Array.Reverse(texBytes);
 #if UNITY_EDITOR
-        File.WriteAllBytes("Data " + Guid.NewGuid().ToString() + ".png", texBytes);
+            File.WriteAllBytes("Data " + Guid.NewGuid().ToString() + ".png", texBytes);
 #endif
-        File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
+            File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
+        }
     }
 
     Color ClampC(Triple triple)
