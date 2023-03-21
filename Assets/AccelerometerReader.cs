@@ -6,6 +6,7 @@ using System;
 using UnityEngine.UI;
 using System.IO;
 using Random = UnityEngine.Random;
+using Unity.VisualScripting;
 
 [Serializable]
 public class Triple
@@ -34,12 +35,20 @@ public class AccelerometerReader : MonoBehaviour
     public Button SaveButton;
     public Button ClearButton;
 
+    public TMP_InputField minRecValueInput;
+    public TMP_InputField maxRecValueInput;
+    private float minRecValue = -2f;
+    private float maxRecValue = 2f;
+
     public List<Triple> recData = new();
     Color bgColour = new(0.1921569f, 0.3019608f, 0.4745098f);
 
     void Start()
     {
         rateInput.onSubmit.AddListener(SetRefreshRate);
+        minRecValueInput.onSubmit.AddListener(SetMinRecordingValue);
+        maxRecValueInput.onSubmit.AddListener(SetMaxRecordingValue);
+
         recordToggle.onValueChanged.AddListener(SetRecording);
         SaveButton.onClick.AddListener(SaveRecordingCache);
         ClearButton.onClick.AddListener(ClearRecordingCache);
@@ -87,6 +96,40 @@ public class AccelerometerReader : MonoBehaviour
             Camera.main.backgroundColor = bgColour;
         }
     }
+    public void SetMinRecordingValue(string value)
+    {
+        float parsed = float.Parse(value.Replace("G", ""));
+        if(parsed < maxRecValue)
+        {
+            minRecValue = parsed;
+            if (!minRecValueInput.text.Contains("G"))
+            {
+                minRecValueInput.text += " G";
+            }
+        }
+        else
+        {
+            minRecValueInput.text = minRecValue + " G";
+            Debug.LogError("Min recording value can not be greater or equal to the max recording value");
+        }
+    }
+    public void SetMaxRecordingValue(string value)
+    {
+        float parsed = float.Parse(value.Replace("G", ""));
+        if (parsed > minRecValue)
+        {
+            maxRecValue = parsed;
+            if (!maxRecValueInput.text.Contains("G"))
+            {
+                maxRecValueInput.text += " G";
+            }
+        }
+        else
+        {
+            maxRecValueInput.text = maxRecValue + " G";
+            Debug.LogError("Max recording value can not be lesser or equal to the min recording value");
+        }
+    }
     public void ClearRecordingCache()
     {
         recData.Clear();
@@ -105,13 +148,13 @@ public class AccelerometerReader : MonoBehaviour
                 int index = x + (y * tex.width);
 
                 //Avoids overruns and inserts a "0"
-                if(index >= recData.Count) 
+                if (index >= recData.Count)
                 {
                     tex.SetPixel(x, y, Color.black);
                     continue;
                 }
                 Triple triple = recData[index];
-                tex.SetPixel(x, y, new Color(Math.Clamp((triple.x + 4f) / 8f, 0, 1), Math.Clamp((triple.y + 4f) / 8f, 0, 1), Math.Clamp((triple.z + 4f) / 8f, 0, 1)));
+                tex.SetPixel(x, y, ClampC(triple));
             }
         }
         tex.Apply();
@@ -124,5 +167,19 @@ public class AccelerometerReader : MonoBehaviour
         File.WriteAllBytes("Data " + Guid.NewGuid().ToString() + ".png", texBytes);
 #endif
         File.WriteAllBytes(Application.persistentDataPath + "Data " + Guid.NewGuid().ToString() + ".png", texBytes);
+    }
+
+    Color ClampC(Triple triple)
+    {
+        //Range to clamp between 0-1
+        float div = maxRecValue - minRecValue;
+        return new Color(
+            ClampF(triple.x) / div,
+            ClampF(triple.y) / div,
+            ClampF(triple.z) / div);
+    }
+    float ClampF(float value)
+    {
+        return Math.Clamp(value, minRecValue, maxRecValue);
     }
 }
